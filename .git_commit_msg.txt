@@ -1,0 +1,19 @@
+feat: initial setup of StayNest frontend platform
+
+- Initialize Next.js project with App Router, TypeScript, and Tailwind CSS
+- Integrate Framer Motion for UI animations and Lucide for vector icons
+- Establish application routing and page structure:
+  - Public pages: Home, About, Contact
+  - Feature pages: Listings directory, Property Details (`listings/[id]`), Booking flow (`booking/[id]`)
+  - Admin dashboard routes: Overview, Owners management, Add Property
+  - Custom 404 (not-found) page
+- Implement core landing page and functional components:
+  - Layout features: Navbar, Footer, SectionHeader
+  - Search & Discovery: SearchBar, FilterSidebar, PopularLocations
+  - Showcases: HeroSection, FeaturedStays, PropertyCard, HostCTA, WhyChoose
+  - Booking & Details: BookingCard, AmenityBadge, Reusable Button
+- Define application data layer in `lib/`:
+  - TypeScript interfaces for properties and bookings (`types.ts`)
+  - Mock datasets for initial development (`data.ts`)
+  - Pricing logic features (`pricing.ts`)
+- Configure initial Tailwind styling and global CSS rules
