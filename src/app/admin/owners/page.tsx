@@ -1,13 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { owners, properties, bookings } from "@/lib/data";
-import { formatKsh, clientPricePerNight } from "@/lib/pricing";
+import { useEffect, useMemo, useState } from "react";
+import { getOwners, getProperties, getBookings } from "@/lib/data";
+import type { Owner, Property, Booking } from "@/lib/types";
+import { formatKsh, formatKshCompact, clientPriceFor, LISTING_TYPE_LABELS } from "@/lib/pricing";
 import { Phone, Mail, Search, Plus } from "lucide-react";
 
 export default function OwnersPage() {
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getOwners(), getProperties(), getBookings()])
+      .then(([o, p, b]) => {
+        if (!alive) return;
+        setOwners(o);
+        setProperties(p);
+        setBookings(b);
+      })
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const rows = useMemo(() => {
     return owners
@@ -22,7 +42,7 @@ export default function OwnersPage() {
         return { owner: o, owned, payouts, profit };
       })
       .filter((r) => r.owner.name.toLowerCase().includes(query.toLowerCase()));
-  }, [query]);
+  }, [owners, properties, bookings, query]);
 
   return (
     <div className="pt-24 pb-16">
@@ -38,9 +58,7 @@ export default function OwnersPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Link href="/admin" className="btn-secondary px-4 py-2 text-sm">
-              Dashboard
-            </Link>
+            <Link href="/admin" className="btn-secondary px-4 py-2 text-sm">Dashboard</Link>
             <Link href="/admin/add-property" className="btn-primary px-4 py-2 text-sm flex items-center gap-1.5">
               <Plus size={14} /> Add property
             </Link>
@@ -49,66 +67,84 @@ export default function OwnersPage() {
 
         <div className="card p-3 flex items-center gap-2 mb-6">
           <Search size={16} className="text-ink-400 ml-2" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+          <input value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search owners..."
-            className="bg-transparent w-full focus:outline-none text-sm py-2"
-          />
+            className="bg-transparent w-full focus:outline-none text-sm py-2" />
         </div>
 
-        <div className="space-y-4">
-          {rows.map(({ owner, owned, payouts, profit }) => (
-            <div key={owner.id} className="card p-5">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div className="font-semibold text-lg">{owner.name}</div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-500 mt-1">
-                    <span className="flex items-center gap-1.5">
-                      <Phone size={12} /> {owner.phone}
-                    </span>
-                    {owner.email && (
-                      <span className="flex items-center gap-1.5">
-                        <Mail size={12} /> {owner.email}
+        {loading ? (
+          <div className="card p-10 text-center text-ink-500">Loading...</div>
+        ) : (
+          <div className="space-y-4">
+            {rows.map(({ owner, owned, payouts, profit }) => (
+              <div key={owner.id} className="card p-5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div>
+                    <div className="font-semibold text-lg">{owner.name}</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-500 mt-1">
+                      <span className="flex items-center gap-1.5"><Phone size={12} /> {owner.phone}</span>
+                      {owner.email && (
+                        <span className="flex items-center gap-1.5"><Mail size={12} /> {owner.email}</span>
+                      )}
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
+                        {owner.payoutMethod ?? "—"}
                       </span>
-                    )}
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-ink-100 text-ink-700">
-                      {owner.payoutMethod ?? "—"}
-                    </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 lg:w-[28rem]">
+                    <Stat label="Properties" value={String(owned.length)} />
+                    <Stat label="Payouts" value={formatKsh(payouts)} />
+                    <Stat label="My profit" value={formatKsh(profit)} brand />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 lg:w-[28rem]">
-                  <Stat label="Properties" value={String(owned.length)} />
-                  <Stat label="Payouts" value={formatKsh(payouts)} />
-                  <Stat label="My profit" value={formatKsh(profit)} brand />
-                </div>
-              </div>
 
-              {owned.length > 0 && (
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {owned.map((p) => {
-                    const finalPrice = clientPricePerNight(p);
-                    return (
-                      <div key={p.id} className="rounded-2xl bg-ink-50 p-3 flex gap-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.images[0]} alt="" className="w-16 h-16 rounded-xl object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium truncate text-sm">{p.name}</div>
-                          <div className="text-[11px] text-ink-500 truncate">{p.location} • {p.type}</div>
-                          <div className="grid grid-cols-3 gap-1 mt-1 text-[10px]">
-                            <Mini label="Owner" value={formatKsh(p.ownerBasePrice)} />
-                            <Mini label="Markup" value={formatKsh(p.markup)} brand />
-                            <Mini label="Client" value={formatKsh(finalPrice)} />
+                {owned.length > 0 && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {owned.map((p) => {
+                      const { amount } = clientPriceFor(p);
+                      const ownerNum =
+                        p.listingType === "sale"
+                          ? p.salePrice ?? 0
+                          : p.listingType === "lease"
+                            ? p.monthlyRent ?? 0
+                            : p.ownerBasePrice ?? 0;
+                      const markupNum =
+                        p.listingType === "sale"
+                          ? p.saleMarkup ?? 0
+                          : p.listingType === "lease"
+                            ? p.leaseMarkup ?? 0
+                            : p.markup ?? 0;
+                      const fmt = p.listingType === "sale" ? formatKshCompact : formatKsh;
+                      return (
+                        <div key={p.id} className="rounded-2xl bg-ink-50 p-3 flex gap-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.images[0]} alt="" className="w-16 h-16 rounded-xl object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium truncate text-sm">{p.name}</div>
+                              <span className="text-[9px] uppercase font-semibold tracking-wider px-1 py-0.5 rounded bg-ink-200 text-ink-600">
+                                {LISTING_TYPE_LABELS[p.listingType]}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-ink-500 truncate">{p.location} • {p.type}</div>
+                            <div className="grid grid-cols-3 gap-1 mt-1 text-[10px]">
+                              <Mini label="Owner" value={fmt(ownerNum)} />
+                              <Mini label="Markup" value={fmt(markupNum)} brand />
+                              <Mini label="Client" value={fmt(amount)} />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+            {rows.length === 0 && (
+              <div className="card p-10 text-center text-ink-500">No owners found.</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

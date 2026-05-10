@@ -1,12 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 import SearchBar from "./SearchBar";
+import { ListingType } from "@/lib/types";
+
+const TABS: { value: ListingType; label: string }[] = [
+  { value: "short_stay", label: "Stay" },
+  { value: "sale",       label: "Buy" },
+  { value: "lease",      label: "Lease" }
+];
 
 export default function HeroSection() {
+  const [tab, setTab] = useState<ListingType>("short_stay");
+
   return (
     <section className="relative min-h-[90vh] flex items-end overflow-hidden">
-      {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{
@@ -24,14 +33,15 @@ export default function HeroSection() {
           className="text-white max-w-3xl"
         >
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur text-xs font-medium tracking-wide mb-5">
-            ✨ Hand-picked stays across Kenya
+            ✨ Stay, buy or lease — all on StayNest
           </span>
           <h1 className="h-display text-4xl sm:text-5xl lg:text-6xl leading-[1.05]">
-            Find a place that feels <em className="not-italic text-brand-300">like home</em>.
+            Find a place that feels{" "}
+            <em className="not-italic text-brand-300">like home</em>.
           </h1>
           <p className="mt-4 text-base sm:text-lg text-white/85 max-w-xl">
-            Cosy studios, beachfront villas and quiet getaways — all verified by StayNest.
-            Book in minutes, stay with confidence.
+            Cosy short stays, homes for sale and properties to lease — all
+            verified by StayNest.
           </p>
         </motion.div>
 
@@ -41,7 +51,25 @@ export default function HeroSection() {
           transition={{ duration: 0.7, delay: 0.15 }}
           className="mt-8"
         >
-          <SearchBar />
+          {/* Tab picker */}
+          <div className="inline-flex bg-white/15 backdrop-blur rounded-full p-1 mb-3">
+            {TABS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setTab(t.value)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  tab === t.value
+                    ? "bg-white text-ink-900"
+                    : "text-white/90 hover:text-white"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <SearchBar activeListingType={tab} />
         </motion.div>
       </div>
     </section>

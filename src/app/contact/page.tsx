@@ -7,15 +7,27 @@ import { Mail, Phone, MapPin, Send, CheckCircle2 } from "lucide-react";
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.message) {
-      alert("Please fill in your name, email and message.");
-      return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to send.");
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message ?? "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    // In real app: POST to /api/contact -> Supabase / email service
-    setSent(true);
   };
 
   return (
@@ -61,9 +73,18 @@ export default function ContactPage() {
                   placeholder="How can we help?"
                 />
               </div>
+              {error && (
+                <div className="sm:col-span-2 text-sm text-red-600 bg-red-50 rounded-2xl px-4 py-3">
+                  {error}
+                </div>
+              )}
               <div className="sm:col-span-2">
-                <button type="submit" className="btn-primary px-6 py-3 text-base flex items-center gap-2">
-                  <Send size={16} /> Send message
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn-primary px-6 py-3 text-base flex items-center gap-2 disabled:opacity-60"
+                >
+                  <Send size={16} /> {submitting ? "Sending…" : "Send message"}
                 </button>
               </div>
             </form>
@@ -71,8 +92,8 @@ export default function ContactPage() {
         </div>
 
         <aside className="space-y-3">
-          <Info icon={<Phone size={16} />} label="Phone" value="+254 700 000 000" />
-          <Info icon={<Mail size={16} />} label="Email" value="hello@staynest.co.ke" />
+          <Info icon={<Phone size={16} />} label="Phone" value="+254 708 781 407" />
+          <Info icon={<Mail size={16} />} label="Email" value="[EMAIL_ADDRESS]" />
           <Info icon={<MapPin size={16} />} label="Office" value="Nairobi, Kenya" />
           <div className="card overflow-hidden">
             <div className="aspect-[4/3] bg-ink-50 grid place-items-center text-ink-400 text-sm">

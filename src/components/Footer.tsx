@@ -41,10 +41,10 @@ export default function Footer() {
         <div>
           <div className="font-semibold mb-3">Get in touch</div>
           <ul className="space-y-2 text-sm text-ink-600">
-            <li className="flex items-center gap-2"><Phone size={14} /> +254 700 000 000</li>
-            <li className="flex items-center gap-2"><Mail size={14} /> hello@staynest.co.ke</li>
+            <li className="flex items-center gap-2"><Phone size={14} /> +254 708 781 407</li>
+            <li className="flex items-center gap-2"><Mail size={14} /> nyakundibrian316@gmail.com</li>
             <li className="flex items-center gap-2"><MapPin size={14} /> Nairobi, Kenya</li>
-          </ul>
+          </ul>  
         </div>
       </div>
       <div className="border-t border-ink-100">

@@ -7,6 +7,8 @@ import { Menu, X, Home as HomeIcon } from "lucide-react";
 
 const links = [
   { href: "/listings", label: "Stays" },
+  { href: "/listings?listingType=sale", label: "For sale" },
+  { href: "/listings?listingType=lease", label: "For lease" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
   { href: "/admin", label: "Admin" }
@@ -25,7 +27,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // On non-home pages, the navbar is always solid.
   const solid = !isHome || scrolled || open;
 
   return (
@@ -46,7 +47,7 @@ export default function Navbar() {
           <span className="font-semibold tracking-tight">StayNest</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-1">
           {links.map((l) => (
             <Link
               key={l.href}
@@ -70,7 +71,7 @@ export default function Navbar() {
 
         <button
           onClick={() => setOpen((v) => !v)}
-          className="md:hidden p-2 rounded-full hover:bg-ink-100/50"
+          className="lg:hidden p-2 rounded-full hover:bg-ink-100/50"
           aria-label="Toggle menu"
         >
           {open ? <X size={20} /> : <Menu size={20} />}
@@ -78,7 +79,7 @@ export default function Navbar() {
       </div>
 
       {open && (
-        <div className="md:hidden bg-cream border-t border-ink-100">
+        <div className="lg:hidden bg-cream border-t border-ink-100">
           <div className="container-px py-3 flex flex-col">
             {links.map((l) => (
               <Link
