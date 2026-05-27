@@ -59,3 +59,80 @@ html, body {
 /* Hide scrollbar utility for horizontal carousels */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+html.dark {
+  --bg: #11151c;
+  --ink: #f7f7f8;
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+html.dark ::-webkit-scrollbar-thumb { background: #3f4757; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #566073; }
+
+html.dark .bg-cream { background-color: #11151c !important; }
+html.dark .bg-white { background-color: #171c26 !important; }
+html.dark .bg-ink-50 { background-color: #1a202b !important; }
+html.dark .bg-ink-100 { background-color: #252d3a !important; }
+html.dark .bg-brand-50 { background-color: #2b1d17 !important; }
+html.dark .bg-amber-50 { background-color: #2b2415 !important; }
+html.dark .bg-emerald-50 { background-color: #13251f !important; }
+
+html.dark .text-ink-900,
+html.dark .text-ink-800,
+html.dark .text-ink-700 { color: #f7f7f8 !important; }
+html.dark .text-ink-600 { color: #d3d7de !important; }
+html.dark .text-ink-500,
+html.dark .text-ink-400 { color: #a8b0bd !important; }
+
+html.dark .border-ink-100,
+html.dark .border-ink-200,
+html.dark .border-ink-300 { border-color: rgba(211, 215, 222, 0.18) !important; }
+
+html.dark .card {
+  background: #171c26;
+  border: 1px solid rgba(211, 215, 222, 0.14);
+  box-shadow: 0 18px 42px -24px rgba(0, 0, 0, 0.72);
+}
+
+html.dark .input,
+html.dark input,
+html.dark textarea,
+html.dark select {
+  color: #f7f7f8;
+  background-color: transparent;
+}
+
+html.dark .input {
+  background-color: #171c26;
+  border-color: rgba(211, 215, 222, 0.2);
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #7a8497;
+}
+
+html.dark .btn-secondary {
+  background-color: #171c26;
+  border-color: rgba(211, 215, 222, 0.2);
+  color: #f7f7f8;
+}
+
+html.dark .btn-secondary:hover,
+html.dark .btn-ghost:hover {
+  background-color: #252d3a;
+}
+
+html.dark .btn-ghost,
+html.dark .chip {
+  color: #d3d7de;
+}
+
+html.dark table tbody tr:hover {
+  background-color: rgba(63, 71, 87, 0.18);
+}

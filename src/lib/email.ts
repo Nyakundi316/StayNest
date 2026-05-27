@@ -77,6 +77,7 @@ export async function emailBookingReceived(opts: {
   checkOut: string;
   nights: number;
   total: number;
+  manageUrl?: string | null;
 }) {
   const firstName = opts.guestName.split(" ")[0];
   const html = base(`
@@ -95,6 +96,15 @@ export async function emailBookingReceived(opts: {
       ${row("Nights", String(opts.nights))}
       ${row("Total", `KSH ${opts.total.toLocaleString("en-KE")}`)}
     </table>
+    ${opts.manageUrl ? `
+      ${divider()}
+      <p style="font-size:13px;color:#566073;margin:0 0 12px">
+        Need to view or cancel your booking? Use this private link — keep it safe.
+      </p>
+      <a href="${opts.manageUrl}" style="display:inline-block;background:#ef6a2b;color:white;text-decoration:none;font-size:14px;font-weight:600;padding:10px 22px;border-radius:10px">
+        Manage your booking
+      </a>
+    ` : ""}
     ${divider()}
     <p style="font-size:13px;color:#566073;margin:0">
       Questions? Reply to this email or call us at +254 708 781 407.
@@ -152,6 +162,7 @@ export async function emailPaymentConfirmed(opts: {
   nights: number;
   total: number;
   receiptNumber?: string | null;
+  manageUrl?: string | null;
 }) {
   const firstName = opts.guestName.split(" ")[0];
   const html = base(`
@@ -169,6 +180,15 @@ export async function emailPaymentConfirmed(opts: {
       ${row("Amount paid", `KSH ${opts.total.toLocaleString("en-KE")}`)}
       ${opts.receiptNumber ? row("M-Pesa receipt", `<code style="font-family:monospace">${opts.receiptNumber}</code>`) : ""}
     </table>
+    ${opts.manageUrl ? `
+      ${divider()}
+      <p style="font-size:13px;color:#566073;margin:0 0 12px">
+        Need to view your booking later? Use your private link.
+      </p>
+      <a href="${opts.manageUrl}" style="display:inline-block;background:#ef6a2b;color:white;text-decoration:none;font-size:14px;font-weight:600;padding:10px 22px;border-radius:10px">
+        Manage your booking
+      </a>
+    ` : ""}
     ${divider()}
     <p style="font-size:13px;color:#566073;margin:0">
       Need to make changes? Contact us at +254 708 781 407.
@@ -200,6 +220,88 @@ export async function emailBookingCancelled(opts: {
     </p>
   `);
   await send(opts.guestEmail, `Booking cancelled — ${opts.propertyName}`, html);
+}
+
+// ---- Host: guest cancelled their booking ----
+
+export async function emailBookingCancelledHost(opts: {
+  hostName: string;
+  hostEmail: string;
+  guestName: string;
+  propertyName: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  reason?: string | null;
+  isLate: boolean;
+}) {
+  const firstName = opts.hostName.split(" ")[0];
+  const html = base(`
+    <p style="margin:0 0 4px">${pill("Cancelled", "#dc2626")}</p>
+    <h1 style="margin:8px 0 16px;font-size:22px;font-weight:700;line-height:1.2">
+      A booking on ${opts.propertyName} was cancelled.
+    </h1>
+    <p style="color:#566073;font-size:14px;margin:0 0 20px">
+      Hi ${firstName}, ${opts.guestName} cancelled their stay.
+      ${opts.isLate
+        ? "This is a <strong>late cancellation</strong> — within 48 hours of check-in."
+        : "This is a free cancellation — more than 48 hours before check-in."}
+    </p>
+    ${divider()}
+    <table cellpadding="0" cellspacing="0" width="100%">
+      ${row("Guest", opts.guestName)}
+      ${row("Check-in", opts.checkIn)}
+      ${row("Check-out", opts.checkOut)}
+      ${row("Nights", String(opts.nights))}
+    </table>
+    ${opts.reason ? `${divider()}<p style="font-size:14px;color:#2e3543;font-style:italic">&ldquo;${opts.reason}&rdquo;</p>` : ""}
+    ${divider()}
+    <p style="font-size:13px;color:#566073;margin:0">
+      Sign in to your host dashboard to see the updated calendar.
+    </p>
+  `);
+  await send(opts.hostEmail, `Cancelled — ${opts.propertyName} (${opts.checkIn})`, html);
+}
+
+// ---- Guest: resend their manage links ----
+
+export async function emailBookingLinks(opts: {
+  email: string;
+  bookings: Array<{
+    propertyName: string;
+    checkIn: string;
+    checkOut: string;
+    status: string;
+    manageUrl: string;
+  }>;
+}) {
+  if (opts.bookings.length === 0) return;
+  const rows = opts.bookings.map((b) => `
+    <tr><td style="padding:14px 0;border-top:1px solid #eceef1">
+      <div style="font-weight:600;font-size:15px">${b.propertyName}</div>
+      <div style="color:#566073;font-size:13px;margin-top:2px">
+        ${b.checkIn} → ${b.checkOut} · ${b.status}
+      </div>
+      <a href="${b.manageUrl}" style="display:inline-block;margin-top:8px;background:#ef6a2b;color:white;text-decoration:none;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px">
+        Open booking
+      </a>
+    </td></tr>
+  `).join("");
+  const html = base(`
+    <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;line-height:1.2">Your booking links</h1>
+    <p style="color:#566073;font-size:14px;margin:0 0 16px">
+      Here ${opts.bookings.length === 1 ? "is the booking" : `are the ${opts.bookings.length} active bookings`} we found on this email.
+      Each link is private — keep it to yourself.
+    </p>
+    <table cellpadding="0" cellspacing="0" width="100%">
+      ${rows}
+    </table>
+    ${divider()}
+    <p style="font-size:13px;color:#566073;margin:0">
+      Didn&rsquo;t request this? You can safely ignore the email.
+    </p>
+  `);
+  await send(opts.email, `Your StayNest booking link${opts.bookings.length > 1 ? "s" : ""}`, html);
 }
 
 // ---- Guest: inquiry received ----
@@ -325,4 +427,30 @@ export async function emailContactForm(opts: {
     <p style="font-size:12px;color:#7a8497;margin:0">Reply directly to this email to respond to ${opts.name}.</p>
   `);
   await send(AGENT_EMAIL, `Contact: ${opts.subject || opts.name}`, html);
+}
+
+// ---- Guest: restock / availability notification ----
+
+export async function emailRestockAvailable(opts: {
+  email: string;
+  propertyName: string;
+  propertyUrl: string;
+}) {
+  const html = base(`
+    <p style="margin:0 0 4px">${pill("Available", "#059669")}</p>
+    <h1 style="margin:8px 0 16px;font-size:22px;font-weight:700;line-height:1.2">
+      ${opts.propertyName} is available again.
+    </h1>
+    <p style="color:#566073;font-size:14px;margin:0 0 24px">
+      You asked us to notify you when this listing came back online. Availability can change quickly, so check the listing when you can.
+    </p>
+    <a href="${opts.propertyUrl}" style="display:inline-block;background:#ef6a2b;color:white;text-decoration:none;font-size:15px;font-weight:600;padding:12px 28px;border-radius:10px">
+      View listing
+    </a>
+    ${divider()}
+    <p style="font-size:12px;color:#7a8497;margin:0">
+      Or copy this link: <a href="${opts.propertyUrl}" style="color:#7a8497">${opts.propertyUrl}</a>
+    </p>
+  `);
+  await send(opts.email, `${opts.propertyName} is available again`, html);
 }

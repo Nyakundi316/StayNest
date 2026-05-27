@@ -54,6 +54,12 @@ The `.env.local` file is already populated with your Supabase project URL and an
         └── data.ts       # Async Supabase queries + writes
 ```
 
+## Production backend
+
+This project does not currently include a `/backend` FastAPI service. The production backend is the Next.js App Router API surface under `src/app/api`, backed by Supabase and guarded by the existing admin/session checks where required.
+
+If a FastAPI service is reintroduced later, treat it as optional or legacy until ownership is explicitly documented. Do not move checkout, M-Pesa, admin, inventory, auth, or SEO logic away from the Next.js route handlers without a migration plan.
+
 ## How the markup model works
 
 All pricing logic lives in `src/lib/pricing.ts`.
@@ -160,7 +166,7 @@ Create a Supabase Storage bucket `property-images`, then in `/admin/add-property
 
 ## Stack
 
-- Next.js 14 (App Router)
+- Next.js 16 (App Router)
 - React 18
 - TypeScript
 - Tailwind CSS

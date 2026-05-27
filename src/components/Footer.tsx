@@ -33,8 +33,7 @@ export default function Footer() {
           <ul className="space-y-2 text-sm text-ink-600">
             <li><Link href="/about" className="hover:text-brand-600">About</Link></li>
             <li><Link href="/contact" className="hover:text-brand-600">Contact</Link></li>
-            <li><Link href="/admin" className="hover:text-brand-600">Agent dashboard</Link></li>
-            <li><Link href="/admin/add-property" className="hover:text-brand-600">Add property</Link></li>
+            <li><Link href="/booking/find" className="hover:text-brand-600">Find my booking</Link></li>
           </ul>
         </div>
 

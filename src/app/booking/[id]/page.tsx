@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Calendar, Users, ShieldCheck, CheckCircle2, Loader2, Smartphone, AlertCircle } from "lucide-react";
 import { getProperty } from "@/lib/data";
 import { buildPriceBreakdown, formatKsh, nightsBetween } from "@/lib/pricing";
+import { guestAuthHeaders, useGuestSession } from "@/lib/guest-auth";
 import type { Property } from "@/lib/types";
 
 type Step = "form" | "payment" | "waiting" | "done" | "manual";
@@ -23,6 +24,8 @@ function BookingInner() {
     return () => { alive = false; };
   }, [params.id]);
 
+  const session = useGuestSession();
+
   const [checkIn, setCheckIn] = useState(search.get("checkIn") ?? "");
   const [checkOut, setCheckOut] = useState(search.get("checkOut") ?? "");
   const [guests, setGuests] = useState(Number(search.get("guests") ?? 1));
@@ -31,6 +34,15 @@ function BookingInner() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [mpesaPhone, setMpesaPhone] = useState("");
+
+  // Prefill identity fields from the signed-in guest, but don't clobber edits.
+  useEffect(() => {
+    if (!session) return;
+    const meta = session.user?.user_metadata ?? {};
+    setName((prev) => prev || (meta.full_name as string | undefined) || "");
+    setEmail((prev) => prev || session.user?.email || "");
+    setPhone((prev) => prev || (meta.phone as string | undefined) || "");
+  }, [session]);
 
   const [step, setStep] = useState<Step>("form");
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -67,22 +79,20 @@ function BookingInner() {
     }
     setSubmitting(true);
     try {
-      const b = buildPriceBreakdown(property, nights);
       const res = await fetch("/api/booking/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(await guestAuthHeaders())
+        },
         body: JSON.stringify({
           propertyId: property.id,
           guestName: name,
           guestEmail: email,
           guestPhone: phone,
-          checkIn, checkOut, guests, nights,
-          pricePerNight: b.perNight,
-          subtotal: b.subtotal,
-          serviceFee: b.serviceFee,
-          total: b.total,
-          ownerPayout: b.ownerPayout,
-          agentProfit: b.agentProfit
+          checkIn,
+          checkOut,
+          guests
         })
       });
       const json = await res.json();
@@ -110,8 +120,7 @@ function BookingInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId,
-          phone: mpesaPhone,
-          amount: buildPriceBreakdown(property, nights).total
+          phone: mpesaPhone
         })
       });
       const json = await res.json();

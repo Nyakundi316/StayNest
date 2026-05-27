@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { CheckCircle2, ImageIcon, Loader2, Plus, X } from "lucide-react";
 import { ListingType, PropertyType } from "@/lib/types";
 import { formatKsh, formatKshCompact } from "@/lib/pricing";
-import { upsertOwner, createProperty } from "@/lib/data";
+import { createProperty, fetchAdminOverview, updateProperty } from "@/lib/admin-api";
+import { authHeaders } from "@/lib/supabase-auth";
 
 const TYPES: PropertyType[] = ["Studio", "Apartment", "House", "Villa", "Room"];
 const LISTING_TYPES: { value: ListingType; label: string; hint: string }[] = [
@@ -34,11 +35,64 @@ export default function AddPropertyPage() {
   const [urlInput, setUrlInput] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const update = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("edit");
+    if (!id) return;
+
+    let alive = true;
+    setEditId(id);
+    setLoadingEdit(true);
+    fetchAdminOverview()
+      .then(({ properties, owners }) => {
+        if (!alive) return;
+        const property = properties.find((p) => p.id === id);
+        if (!property) {
+          setError("Property not found.");
+          return;
+        }
+        const owner = owners.find((o) => o.id === property.ownerId);
+        setForm({
+          listingType: property.listingType,
+          name: property.name,
+          location: property.location,
+          city: property.city,
+          type: property.type,
+          ownerName: owner?.name ?? "",
+          ownerPhone: owner?.phone ?? "",
+          ownerEmail: owner?.email ?? "",
+          ownerPayoutMethod: owner?.payoutMethod ?? "M-Pesa",
+          ownerBasePrice: property.ownerBasePrice ?? 0,
+          markup: property.markup ?? 0,
+          salePrice: property.salePrice ?? 0,
+          saleMarkup: property.saleMarkup ?? 0,
+          monthlyRent: property.monthlyRent ?? 0,
+          leaseMarkup: property.leaseMarkup ?? 0,
+          leaseTermMonths: property.leaseTermMonths ?? 12,
+          bedrooms: property.bedrooms,
+          bathrooms: property.bathrooms,
+          guests: property.guests || 1,
+          amenities: property.amenities.join(", "),
+          rules: (property.rules ?? []).join(", "),
+          description: property.description,
+          available: property.available
+        });
+        setImages(property.images ?? []);
+      })
+      .catch((err) => alive && setError(err.message ?? "Could not load property."))
+      .finally(() => alive && setLoadingEdit(false));
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const finalPrice = useMemo(() => {
     if (form.listingType === "sale") return Number(form.salePrice) + Number(form.saleMarkup);
@@ -64,7 +118,11 @@ export default function AddPropertyPage() {
       valid.map(async (file) => {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: await authHeaders(),
+          body: fd
+        });
         const json = await res.json();
         if (json.url) setImages((prev) => [...prev, json.url]);
       })
@@ -115,16 +173,15 @@ export default function AddPropertyPage() {
 
     setSubmitting(true);
     try {
-      const owner = await upsertOwner({
+      const city = form.city || form.location.split(",").pop()?.trim() || form.location;
+
+      const owner = {
         name: form.ownerName,
         phone: form.ownerPhone,
         email: form.ownerEmail || undefined,
         payoutMethod: form.ownerPayoutMethod
-      });
-
-      const city = form.city || form.location.split(",").pop()?.trim() || form.location;
-
-      await createProperty({
+      };
+      const property = {
         name: form.name,
         location: form.location,
         city,
@@ -144,9 +201,14 @@ export default function AddPropertyPage() {
         amenities: form.amenities.split(",").map((s) => s.trim()).filter(Boolean),
         rules: form.rules.split(",").map((s) => s.trim()).filter(Boolean),
         images,
-        available: form.available,
-        ownerId: owner.id
-      });
+        available: form.available
+      };
+
+      if (editId) {
+        await updateProperty(editId, owner, property);
+      } else {
+        await createProperty(owner, property);
+      }
 
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -160,6 +222,7 @@ export default function AddPropertyPage() {
   // ---- Success screen ----
 
   if (submitted) {
+    const action = editId ? "updated" : "added";
     return (
       <div className="pt-32 pb-16 container-px max-w-2xl">
         <motion.div
@@ -170,7 +233,7 @@ export default function AddPropertyPage() {
           <div className="w-14 h-14 rounded-full bg-brand-500 grid place-items-center text-white mx-auto mb-4">
             <CheckCircle2 size={28} />
           </div>
-          <h1 className="h-display text-3xl mb-2">Property added</h1>
+          <h1 className="h-display text-3xl mb-2">Property {action}</h1>
           <p className="text-ink-600">
             <strong>{form.name}</strong> is now live with {images.length} image{images.length !== 1 ? "s" : ""}.
           </p>
@@ -193,7 +256,13 @@ export default function AddPropertyPage() {
             <Link href="/admin" className="btn-secondary px-5 py-2.5 text-sm">Back to dashboard</Link>
             <Link href={`/listings?listingType=${form.listingType}`} className="btn-secondary px-5 py-2.5 text-sm">View listings</Link>
             <button
-              onClick={() => { setSubmitted(false); setForm(EMPTY_FORM); setImages([]); }}
+              onClick={() => {
+                setSubmitted(false);
+                setEditId(null);
+                setForm(EMPTY_FORM);
+                setImages([]);
+                window.history.replaceState(null, "", "/admin/add-property");
+              }}
               className="btn-primary px-5 py-2.5 text-sm"
             >
               Add another
@@ -208,12 +277,25 @@ export default function AddPropertyPage() {
   const isSale = form.listingType === "sale";
   const isLease = form.listingType === "lease";
 
+  if (loadingEdit) {
+    return (
+      <div className="pt-32 pb-16 container-px max-w-4xl">
+        <div className="card p-8 flex items-center gap-3 text-ink-600">
+          <Loader2 size={18} className="animate-spin text-brand-500" />
+          Loading property...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-24 pb-16">
       <div className="container-px max-w-4xl">
         <div className="mb-6">
           <div className="text-xs font-semibold uppercase tracking-wider text-brand-600 mb-1">Admin only</div>
-          <h1 className="h-display text-3xl sm:text-4xl">Add a new property</h1>
+          <h1 className="h-display text-3xl sm:text-4xl">
+            {editId ? "Edit property" : "Add a new property"}
+          </h1>
           <p className="text-ink-500 mt-1 text-sm">
             Owner price + your markup = final price the client sees.
           </p>
@@ -442,7 +524,7 @@ export default function AddPropertyPage() {
               disabled={submitting || uploading}
               className="btn-primary w-full py-3.5 disabled:opacity-60"
             >
-              {submitting ? "Saving…" : uploading ? "Waiting for uploads…" : "Save property"}
+              {submitting ? "Saving..." : uploading ? "Waiting for uploads..." : editId ? "Update property" : "Save property"}
             </button>
           </div>
 

@@ -1,9 +1,18 @@
 import { supabase } from "./supabase";
-import { Owner, Property, Booking, Inquiry, Review, ListingType } from "./types";
+import {
+  Owner,
+  Property,
+  Booking,
+  Inquiry,
+  Review,
+  ListingType,
+  RestockSubscription
+} from "./types";
 
 // ---- Row mappers (snake_case → camelCase) ----
+// Exported so the admin API routes (service role) reuse the same shapes.
 
-function mapProperty(r: any): Property {
+export function mapProperty(r: any): Property {
   return {
     id: r.id,
     name: r.name,
@@ -28,12 +37,13 @@ function mapProperty(r: any): Property {
     rating: Number(r.rating ?? 0),
     reviews: r.reviews ?? 0,
     available: r.available,
-    ownerId: r.owner_id,
+    archived: Boolean(r.archived ?? false),
+    ownerId: r.owner_id ?? "",
     createdAt: r.created_at
   };
 }
 
-function mapOwner(r: any): Owner {
+export function mapOwner(r: any): Owner {
   return {
     id: r.id,
     name: r.name,
@@ -43,7 +53,7 @@ function mapOwner(r: any): Owner {
   };
 }
 
-function mapBooking(r: any): Booking {
+export function mapBooking(r: any): Booking {
   return {
     id: r.id,
     propertyId: r.property_id,
@@ -68,7 +78,7 @@ function mapBooking(r: any): Booking {
   };
 }
 
-function mapInquiry(r: any): Inquiry {
+export function mapInquiry(r: any): Inquiry {
   return {
     id: r.id,
     propertyId: r.property_id,
@@ -86,7 +96,7 @@ function mapInquiry(r: any): Inquiry {
   };
 }
 
-function mapReview(r: any): Review {
+export function mapReview(r: any): Review {
   return {
     id: r.id,
     propertyId: r.property_id,
@@ -98,10 +108,29 @@ function mapReview(r: any): Review {
   };
 }
 
-// ---- Reads ----
+export function mapRestockSubscription(r: any): RestockSubscription {
+  return {
+    id: r.id,
+    propertyId: r.property_id,
+    email: r.email,
+    status: r.status,
+    notifiedAt: r.notified_at ?? null,
+    createdAt: r.created_at
+  };
+}
+
+// ---- Public reads ----
+// These run with the anon key in the browser. They read from the
+// `properties_public` view (see migration 0003), which collapses owner
+// price + markup into a single client-facing price and hides owner_id,
+// payout and profit. Raw `properties`/`owners`/`bookings` are no longer
+// readable by the anon key — that data is admin-only via /api/admin/*.
 
 export async function getProperties(filter?: { listingType?: ListingType }): Promise<Property[]> {
-  let q = supabase.from("properties").select("*").order("created_at", { ascending: true });
+  let q = supabase
+    .from("properties_public")
+    .select("*")
+    .order("created_at", { ascending: true });
   if (filter?.listingType) q = q.eq("listing_type", filter.listingType);
   const { data, error } = await q;
   if (error) throw error;
@@ -110,37 +139,22 @@ export async function getProperties(filter?: { listingType?: ListingType }): Pro
 
 export async function getProperty(id: string): Promise<Property | null> {
   const { data, error } = await supabase
-    .from("properties").select("*").eq("id", id).maybeSingle();
+    .from("properties_public").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   return data ? mapProperty(data) : null;
 }
 
-export async function getOwners(): Promise<Owner[]> {
-  const { data, error } = await supabase
-    .from("owners").select("*").order("created_at", { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map(mapOwner);
-}
-
-export async function getOwner(id: string): Promise<Owner | null> {
-  const { data, error } = await supabase
-    .from("owners").select("*").eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data ? mapOwner(data) : null;
-}
-
-export async function getBookings(): Promise<Booking[]> {
-  const { data, error } = await supabase
-    .from("bookings").select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).map(mapBooking);
-}
-
-export async function getInquiries(): Promise<Inquiry[]> {
-  const { data, error } = await supabase
-    .from("inquiries").select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).map(mapInquiry);
+export async function similarProperties(id: string, limit = 4): Promise<Property[]> {
+  const target = await getProperty(id);
+  if (!target) return [];
+  const { data } = await supabase
+    .from("properties_public").select("*")
+    .neq("id", id)
+    .eq("listing_type", target.listingType);
+  return (data ?? [])
+    .map(mapProperty)
+    .filter((p) => p.type === target.type || p.city === target.city)
+    .slice(0, limit);
 }
 
 export async function getReviews(propertyId: string): Promise<Review[]> {
@@ -151,167 +165,6 @@ export async function getReviews(propertyId: string): Promise<Review[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapReview);
-}
-
-export async function similarProperties(id: string, limit = 4): Promise<Property[]> {
-  const target = await getProperty(id);
-  if (!target) return [];
-  const { data } = await supabase
-    .from("properties").select("*")
-    .neq("id", id)
-    .eq("listing_type", target.listingType);
-  return (data ?? [])
-    .map(mapProperty)
-    .filter((p) => p.type === target.type || p.city === target.city)
-    .slice(0, limit);
-}
-
-// ---- Writes ----
-
-export async function createProperty(input: {
-  name: string;
-  location: string;
-  city: string;
-  type: Property["type"];
-  listingType: ListingType;
-  description: string;
-  bedrooms: number;
-  bathrooms: number;
-  guests: number;
-  // Per-listing-type pricing
-  ownerBasePrice?: number;
-  markup?: number;
-  salePrice?: number;
-  saleMarkup?: number;
-  monthlyRent?: number;
-  leaseMarkup?: number;
-  leaseTermMonths?: number;
-  amenities: string[];
-  rules?: string[];
-  images?: string[];
-  available?: boolean;
-  ownerId: string;
-}): Promise<Property> {
-  const row: any = {
-    name: input.name,
-    location: input.location,
-    city: input.city,
-    type: input.type,
-    listing_type: input.listingType,
-    description: input.description,
-    images: input.images ?? [],
-    bedrooms: input.bedrooms,
-    bathrooms: input.bathrooms,
-    guests: input.guests,
-    amenities: input.amenities,
-    rules: input.rules ?? [],
-    available: input.available ?? true,
-    owner_id: input.ownerId
-  };
-  if (input.listingType === "short_stay") {
-    row.owner_base_price = input.ownerBasePrice;
-    row.markup = input.markup ?? 0;
-  } else if (input.listingType === "sale") {
-    row.sale_price = input.salePrice;
-    row.sale_markup = input.saleMarkup ?? 0;
-  } else if (input.listingType === "lease") {
-    row.monthly_rent = input.monthlyRent;
-    row.lease_markup = input.leaseMarkup ?? 0;
-    row.lease_term_months = input.leaseTermMonths ?? null;
-  }
-
-  const { data, error } = await supabase
-    .from("properties").insert(row).select("*").single();
-  if (error) throw error;
-  return mapProperty(data);
-}
-
-export async function upsertOwner(input: {
-  name: string;
-  phone: string;
-  email?: string;
-  payoutMethod?: Owner["payoutMethod"];
-}): Promise<Owner> {
-  const { data: existing } = await supabase
-    .from("owners").select("*").eq("phone", input.phone).maybeSingle();
-  if (existing) return mapOwner(existing);
-
-  const { data, error } = await supabase
-    .from("owners").insert({
-      name: input.name,
-      phone: input.phone,
-      email: input.email ?? null,
-      payout_method: input.payoutMethod ?? null
-    }).select("*").single();
-  if (error) throw error;
-  return mapOwner(data);
-}
-
-export async function createBooking(input: {
-  propertyId: string;
-  guestName: string;
-  guestEmail: string;
-  guestPhone: string;
-  checkIn: string;
-  checkOut: string;
-  guests: number;
-  nights: number;
-  pricePerNight: number;
-  subtotal: number;
-  serviceFee: number;
-  total: number;
-  ownerPayout: number;
-  agentProfit: number;
-}): Promise<Booking> {
-  const { data, error } = await supabase
-    .from("bookings").insert({
-      property_id: input.propertyId,
-      guest_name: input.guestName,
-      guest_email: input.guestEmail,
-      guest_phone: input.guestPhone,
-      check_in: input.checkIn,
-      check_out: input.checkOut,
-      guests: input.guests,
-      nights: input.nights,
-      price_per_night: input.pricePerNight,
-      subtotal: input.subtotal,
-      service_fee: input.serviceFee,
-      total: input.total,
-      owner_payout: input.ownerPayout,
-      agent_profit: input.agentProfit,
-      status: "pending"
-    }).select("*").single();
-  if (error) throw error;
-  return mapBooking(data);
-}
-
-export async function createInquiry(input: {
-  propertyId: string;
-  kind: Inquiry["kind"];
-  guestName: string;
-  guestEmail: string;
-  guestPhone: string;
-  preferredDate?: string;
-  offerAmount?: number;
-  moveInDate?: string;
-  leaseTermMonths?: number;
-  message?: string;
-}): Promise<Inquiry> {
-  const { data, error } = await supabase
-    .from("inquiries").insert({
-      property_id: input.propertyId,
-      kind: input.kind,
-      guest_name: input.guestName,
-      guest_email: input.guestEmail,
-      guest_phone: input.guestPhone,
-      preferred_date: input.preferredDate ?? null,
-      offer_amount: input.offerAmount ?? null,
-      move_in_date: input.moveInDate ?? null,
-      lease_term_months: input.leaseTermMonths ?? null,
-      message: input.message ?? null
-    }).select("*").single();
-  if (error) throw error;
-  return mapInquiry(data);
 }
 
 // ---- Static (not in DB) ----

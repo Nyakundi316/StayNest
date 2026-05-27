@@ -25,7 +25,7 @@ export default function HostCTA() {
             your base rate — we take care of the rest and pay out automatically.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button href="/admin/add-property" size="lg">List a property</Button>
+            <Button href="/contact" size="lg">List a property</Button>
             <Link
               href="/about"
               className="btn btn-secondary px-6 py-3 text-base bg-white/15 backdrop-blur border-white/30 text-white hover:bg-white/25"

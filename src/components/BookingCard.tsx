@@ -94,7 +94,7 @@ export default function BookingCard({ property }: Props) {
       </button>
 
       <p className="mt-2 text-center text-xs text-ink-500">
-        You won't be charged yet
+        You won&apos;t be charged yet
       </p>
 
       <div className="mt-5 pt-5 border-t border-ink-100 space-y-2 text-sm">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getOwners, getProperties, getBookings } from "@/lib/data";
+import { fetchAdminOverview } from "@/lib/admin-api";
 import type { Owner, Property, Booking } from "@/lib/types";
 import { formatKsh, formatKshCompact, clientPriceFor, LISTING_TYPE_LABELS } from "@/lib/pricing";
 import { Phone, Mail, Search, Plus } from "lucide-react";
@@ -16,12 +16,12 @@ export default function OwnersPage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getOwners(), getProperties(), getBookings()])
-      .then(([o, p, b]) => {
+    fetchAdminOverview()
+      .then(({ owners, properties, bookings }) => {
         if (!alive) return;
-        setOwners(o);
-        setProperties(p);
-        setBookings(b);
+        setOwners(owners);
+        setProperties(properties);
+        setBookings(bookings);
       })
       .finally(() => alive && setLoading(false));
     return () => {

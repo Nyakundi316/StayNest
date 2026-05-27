@@ -3,14 +3,15 @@ import { createServerClient } from "@/lib/supabase-server";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { bookingId: string } }
+  { params }: { params: Promise<{ bookingId: string }> }
 ) {
+  const { bookingId } = await params;
   const db = createServerClient();
 
   const { data: booking, error } = await db
     .from("bookings")
     .select("id, guest_name, status, property_id, check_out")
-    .eq("id", params.bookingId)
+    .eq("id", bookingId)
     .maybeSingle();
 
   if (error || !booking) {
@@ -24,7 +25,7 @@ export async function GET(
   const { data: existing } = await db
     .from("reviews")
     .select("id")
-    .eq("booking_id", params.bookingId)
+    .eq("booking_id", bookingId)
     .maybeSingle();
 
   if (existing) {
@@ -47,9 +48,10 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { bookingId: string } }
+  { params }: { params: Promise<{ bookingId: string }> }
 ) {
   try {
+    const { bookingId } = await params;
     const { guestName, rating, comment } = await req.json();
 
     if (!guestName?.trim()) {
@@ -64,7 +66,7 @@ export async function POST(
     const { data: booking, error: bookingErr } = await db
       .from("bookings")
       .select("id, status, property_id")
-      .eq("id", params.bookingId)
+      .eq("id", bookingId)
       .maybeSingle();
 
     if (bookingErr || !booking) {
@@ -77,7 +79,7 @@ export async function POST(
     const { data: existing } = await db
       .from("reviews")
       .select("id")
-      .eq("booking_id", params.bookingId)
+      .eq("booking_id", bookingId)
       .maybeSingle();
 
     if (existing) {
@@ -88,7 +90,7 @@ export async function POST(
       .from("reviews")
       .insert({
         property_id: booking.property_id,
-        booking_id: params.bookingId,
+        booking_id: bookingId,
         guest_name: guestName.trim(),
         rating,
         comment: comment?.trim() || null

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { supabaseAuth } from "@/lib/supabase-auth";
+import { clearAdminSession, establishAdminSession, supabaseAuth } from "@/lib/supabase-auth";
 import { LogOut, ShieldCheck } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -13,32 +13,60 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabaseAuth.auth.getSession().then(({ data }) => {
+    let alive = true;
+
+    supabaseAuth.auth.getSession().then(async ({ data }) => {
+      if (!alive) return;
       const hasSession = Boolean(data.session);
-      setAuthed(hasSession);
       if (!hasSession && !isLoginPage) {
+        setAuthed(false);
         router.replace("/admin/login");
+        return;
       }
-      // Already logged in, redirect away from login page
-      if (hasSession && isLoginPage) {
-        router.replace("/admin");
+      if (!hasSession) {
+        setAuthed(false);
+        return;
+      }
+
+      try {
+        await establishAdminSession();
+        if (!alive) return;
+        setAuthed(true);
+        if (isLoginPage) router.replace("/admin");
+      } catch {
+        await supabaseAuth.auth.signOut();
+        await clearAdminSession();
+        if (!alive) return;
+        setAuthed(false);
+        if (!isLoginPage) router.replace("/admin/login");
       }
     });
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
+        clearAdminSession();
         setAuthed(false);
         router.replace("/admin/login");
       }
       if (event === "SIGNED_IN") {
-        setAuthed(true);
+        establishAdminSession()
+          .then(() => setAuthed(true))
+          .catch(async () => {
+            await supabaseAuth.auth.signOut();
+            await clearAdminSession();
+            setAuthed(false);
+          });
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
   }, [isLoginPage, router]);
 
   const handleSignOut = async () => {
+    await clearAdminSession();
     await supabaseAuth.auth.signOut();
   };
 

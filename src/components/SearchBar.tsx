@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { MapPin, Calendar, Users, Search, BedDouble } from "lucide-react";
 import { ListingType } from "@/lib/types";
 
@@ -12,7 +12,18 @@ interface Props {
   activeListingType?: ListingType | "All";
 }
 
-export default function SearchBar({ variant = "hero", activeListingType }: Props) {
+// useSearchParams() must sit behind a Suspense boundary or `next build` fails
+// when this bar is rendered on a statically-generated route (e.g. the home page
+// hero). Wrapping here keeps every call site safe without extra boilerplate.
+export default function SearchBar(props: Props) {
+  return (
+    <Suspense fallback={<SearchBarSkeleton variant={props.variant ?? "hero"} />}>
+      <SearchBarInner {...props} />
+    </Suspense>
+  );
+}
+
+function SearchBarInner({ variant = "hero", activeListingType }: Props) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -132,6 +143,26 @@ export default function SearchBar({ variant = "hero", activeListingType }: Props
         <span className="hidden sm:inline">Search</span>
       </button>
     </form>
+  );
+}
+
+// Matches the bar's footprint so the hero doesn't jump while params resolve.
+function SearchBarSkeleton({ variant }: { variant: "hero" | "page" }) {
+  return (
+    <div
+      className={`bg-white rounded-3xl shadow-card p-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_0.8fr_auto] ${
+        variant === "page" ? "border border-ink-100" : ""
+      }`}
+      aria-hidden
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="px-4 py-2.5">
+          <div className="h-3 w-16 bg-ink-100 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-ink-100 rounded mt-2 animate-pulse" />
+        </div>
+      ))}
+      <div className="bg-ink-100 rounded-2xl animate-pulse min-h-[3rem]" />
+    </div>
   );
 }
 

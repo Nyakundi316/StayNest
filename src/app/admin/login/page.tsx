@@ -1,12 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabaseAuth } from "@/lib/supabase-auth";
+import { useRouter, useSearchParams } from "next/navigation";
+import { establishAdminSession, supabaseAuth } from "@/lib/supabase-auth";
 import { Eye, EyeOff } from "lucide-react";
+
+function safeNext(value: string | null): string {
+  if (!value) return "/admin";
+  if (!value.startsWith("/admin")) return "/admin";
+  if (value.startsWith("//")) return "/admin";
+  return value;
+}
 
 export default function AdminLogin() {
   const router = useRouter();
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -30,7 +39,13 @@ export default function AdminLogin() {
       return;
     }
 
-    router.replace("/admin");
+    try {
+      await establishAdminSession();
+      router.replace(next);
+    } catch (sessionError: any) {
+      await supabaseAuth.auth.signOut();
+      setError(sessionError.message ?? "This account is not authorized for admin access.");
+    }
   };
 
   return (

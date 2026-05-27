@@ -9,7 +9,10 @@ import AmenityBadge from "@/components/AmenityBadge";
 import BookingCard from "@/components/BookingCard";
 import InquiryCard from "@/components/InquiryCard";
 import PropertyCard from "@/components/PropertyCard";
+import RecentlyViewed from "@/components/RecentlyViewed";
+import RestockNotify from "@/components/RestockNotify";
 import SectionHeader from "@/components/SectionHeader";
+import SocialShare from "@/components/SocialShare";
 import type { Property, Review } from "@/lib/types";
 
 export default function PropertyPage() {
@@ -53,6 +56,9 @@ export default function PropertyPage() {
 
   if (property === null) return notFound();
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  const shareUrl = appUrl ? `${appUrl}/listings/${property.id}` : undefined;
+
   return (
     <div className="pt-24 pb-16">
       <div className="container-px">
@@ -63,6 +69,11 @@ export default function PropertyPage() {
         >
           <h1 className="h-display text-3xl sm:text-4xl">{property.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-600">
+            {!property.available && (
+              <span className="rounded-full bg-ink-900 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                Currently unavailable
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <Star size={14} className="fill-brand-500 text-brand-500" />
               <span className="font-medium">{property.rating.toFixed(2)}</span>
@@ -167,11 +178,22 @@ export default function PropertyPage() {
           </div>
 
           <div>
-            {property.listingType === "short_stay" ? (
-              <BookingCard property={property} />
-            ) : (
-              <InquiryCard property={property} />
-            )}
+            <div className="space-y-4">
+              {property.available ? (
+                property.listingType === "short_stay" ? (
+                  <BookingCard property={property} />
+                ) : (
+                  <InquiryCard property={property} />
+                )
+              ) : (
+                <RestockNotify propertyId={property.id} propertyName={property.name} />
+              )}
+              <SocialShare
+                title={property.name}
+                image={property.images[0]}
+                url={shareUrl}
+              />
+            </div>
           </div>
         </div>
 
@@ -189,6 +211,8 @@ export default function PropertyPage() {
             </div>
           </section>
         )}
+
+        <RecentlyViewed currentPropertyId={property.id} />
       </div>
     </div>
   );

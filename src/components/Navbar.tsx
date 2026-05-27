@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X, Home as HomeIcon } from "lucide-react";
+import { Menu, X, Home as HomeIcon, User } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
+import { useGuestSession } from "@/lib/guest-auth";
 
 const links = [
   { href: "/listings", label: "Stays" },
   { href: "/listings?listingType=sale", label: "For sale" },
   { href: "/listings?listingType=lease", label: "For lease" },
   { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
-  { href: "/admin", label: "Admin" }
+  { href: "/contact", label: "Contact" }
 ];
 
 export default function Navbar() {
@@ -19,6 +20,8 @@ export default function Navbar() {
   const isHome = pathname === "/";
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const session = useGuestSession();
+  const signedIn = Boolean(session);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -33,7 +36,7 @@ export default function Navbar() {
     <header
       className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
         solid
-          ? "bg-cream/95 backdrop-blur border-b border-ink-100 text-ink-900"
+          ? "bg-cream/95 dark:bg-[#11151c]/95 backdrop-blur border-b border-ink-100 dark:border-white/10 text-ink-900 dark:text-ink-50"
           : "bg-transparent text-white"
       }`}
     >
@@ -54,7 +57,7 @@ export default function Navbar() {
               href={l.href}
               className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                 solid
-                  ? "hover:bg-ink-100 text-ink-700"
+                  ? "hover:bg-ink-100 dark:hover:bg-white/10 text-ink-700 dark:text-ink-100"
                   : "hover:bg-white/15 text-white/95"
               }`}
             >
@@ -62,41 +65,76 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            href="/admin/add-property"
-            className="ml-2 btn-primary px-4 py-2 text-sm"
+            href={signedIn ? "/account/bookings" : "/account/login"}
+            className={`ml-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
+              solid
+                ? "border-ink-200 dark:border-white/15 text-ink-700 dark:text-ink-100 hover:bg-ink-100 dark:hover:bg-white/10"
+                : "border-white/30 text-white hover:bg-white/15"
+            }`}
           >
-            Add property
+            <User size={14} />
+            {signedIn ? "My account" : "Sign in"}
           </Link>
+          <Link
+            href="/contact"
+            className="ml-1 btn-primary px-4 py-2 text-sm"
+          >
+            List your property
+          </Link>
+          <ThemeToggle
+            className={
+              solid
+                ? "border-ink-200 dark:border-white/15 text-ink-700 dark:text-ink-100 hover:bg-ink-100 dark:hover:bg-white/10"
+                : "border-white/30 text-white hover:bg-white/15"
+            }
+          />
         </nav>
 
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="lg:hidden p-2 rounded-full hover:bg-ink-100/50"
-          aria-label="Toggle menu"
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-2 lg:hidden">
+          <ThemeToggle
+            className={
+              solid
+                ? "border-ink-200 dark:border-white/15 text-ink-700 dark:text-ink-100 hover:bg-ink-100 dark:hover:bg-white/10"
+                : "border-white/30 text-white hover:bg-white/15"
+            }
+          />
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-full p-2 hover:bg-ink-100/50 dark:hover:bg-white/10"
+            aria-label="Toggle menu"
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {open && (
-        <div className="lg:hidden bg-cream border-t border-ink-100">
+        <div className="lg:hidden bg-cream dark:bg-[#11151c] border-t border-ink-100 dark:border-white/10">
           <div className="container-px py-3 flex flex-col">
             {links.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="px-3 py-3 rounded-xl hover:bg-ink-100 text-ink-700"
+                className="px-3 py-3 rounded-xl hover:bg-ink-100 dark:hover:bg-white/10 text-ink-700 dark:text-ink-100"
               >
                 {l.label}
               </Link>
             ))}
             <Link
-              href="/admin/add-property"
+              href={signedIn ? "/account/bookings" : "/account/login"}
+              onClick={() => setOpen(false)}
+              className="px-3 py-3 rounded-xl hover:bg-ink-100 dark:hover:bg-white/10 text-ink-700 dark:text-ink-100 inline-flex items-center gap-2"
+            >
+              <User size={15} />
+              {signedIn ? "My account" : "Sign in"}
+            </Link>
+            <Link
+              href="/contact"
               onClick={() => setOpen(false)}
               className="mt-2 btn-primary py-3 text-sm"
             >
-              Add property
+              List your property
             </Link>
           </div>
         </div>

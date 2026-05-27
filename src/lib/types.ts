@@ -49,6 +49,7 @@ export interface Property {
   rating: number;
   reviews: number;
   available: boolean;
+  archived?: boolean;
 
   ownerId: string;
   createdAt: string;
@@ -103,6 +104,23 @@ export interface Review {
   rating: number;
   comment: string | null;
   createdAt: string;
+}
+
+export interface RestockSubscription {
+  id: string;
+  propertyId: string;
+  email: string;
+  status: "active" | "notified" | "cancelled";
+  notifiedAt?: string | null;
+  createdAt: string;
+}
+
+export interface RecentView {
+  id: string;
+  propertyId: string;
+  guestId?: string | null;
+  userId?: string | null;
+  viewedAt: string;
 }
 
 export interface SearchFilters {

@@ -57,7 +57,6 @@ function ListingsInner() {
       guests:      Number(params.get("guests") ?? f.guests) || f.guests,
       bedrooms:    Number(params.get("bedrooms") ?? 0)
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
   const filtered = useMemo(() => {

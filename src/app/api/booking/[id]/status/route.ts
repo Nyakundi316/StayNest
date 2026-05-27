@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { emailPaymentConfirmed, emailBookingCancelled, emailReviewRequest } from "@/lib/email";
+import { createBookingAccessToken, manageBookingUrl } from "@/lib/booking-access";
 
 const VALID: Record<string, string[]> = {
   pending: ["confirmed", "cancelled"],
@@ -11,9 +13,13 @@ const VALID: Record<string, string[]> = {
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    const auth = await requireAdmin(req);
+    if (auth.error) return auth.error;
+
     const { status } = await req.json();
     const db = createServerClient();
 
@@ -21,7 +27,7 @@ export async function PUT(
     const { data: booking, error: fetchErr } = await db
       .from("bookings")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (fetchErr || !booking) {
@@ -36,7 +42,7 @@ export async function PUT(
       );
     }
 
-    await db.from("bookings").update({ status }).eq("id", params.id);
+    await db.from("bookings").update({ status }).eq("id", id);
 
     // Fetch property name for emails
     const { data: prop } = await db
@@ -47,6 +53,8 @@ export async function PUT(
     const propertyName = prop?.name ?? "your property";
 
     if (status === "confirmed") {
+      const token = await createBookingAccessToken(id, booking.guest_email).catch(() => null);
+      const manageUrl = token ? manageBookingUrl(id, token, req.nextUrl.origin) : null;
       emailPaymentConfirmed({
         guestName: booking.guest_name,
         guestEmail: booking.guest_email,
@@ -55,7 +63,8 @@ export async function PUT(
         checkOut: booking.check_out,
         nights: booking.nights,
         total: booking.total,
-        receiptNumber: booking.mpesa_receipt_number ?? null
+        receiptNumber: booking.mpesa_receipt_number ?? null,
+        manageUrl
       }).catch(console.error);
     }
 
@@ -65,7 +74,7 @@ export async function PUT(
         guestEmail: booking.guest_email,
         propertyName,
         checkOut: booking.check_out,
-        bookingId: params.id
+        bookingId: id
       }).catch(console.error);
     }
 

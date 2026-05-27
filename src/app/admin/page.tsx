@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { getProperties, getOwners, getBookings, getInquiries } from "@/lib/data";
+import AdminAnalytics from "@/components/admin/AdminAnalytics";
+import { downloadAdminCsv, fetchAdminOverview, setPropertyArchived } from "@/lib/admin-api";
+import { authHeaders } from "@/lib/supabase-auth";
 import {
   aggregate,
   formatKsh,
@@ -12,10 +14,11 @@ import {
   potentialPipeline,
   LISTING_TYPE_LABELS
 } from "@/lib/pricing";
-import type { Booking, Inquiry, Property, Owner } from "@/lib/types";
+import type { Booking, Inquiry, Property, Owner, RestockSubscription } from "@/lib/types";
 import {
   Calendar, Users, Wallet, TrendingUp, Clock, CheckCircle2, Plus, Building2,
-  Home, Tag, Key, MessageSquare, Loader2
+  Home, Tag, Key, MessageSquare, Loader2, Pencil, Archive, ArchiveRestore,
+  Download, Bell
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -23,23 +26,26 @@ export default function AdminDashboard() {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [restockSubscriptions, setRestockSubscriptions] = useState<RestockSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [exportBusy, setExportBusy] = useState<string | null>(null);
 
   const reload = useCallback(() => setRefresh((r) => r + 1), []);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([getProperties(), getOwners(), getBookings(), getInquiries()])
-      .then(([p, o, b, i]) => {
+    fetchAdminOverview()
+      .then(({ properties, owners, bookings, inquiries, restockSubscriptions }) => {
         if (!alive) return;
-        setProperties(p);
-        setOwners(o);
-        setBookings(b);
-        setInquiries(i);
+        setProperties(properties);
+        setOwners(owners);
+        setBookings(bookings);
+        setInquiries(inquiries);
+        setRestockSubscriptions(restockSubscriptions);
       })
       .catch((e) => alive && setError(e.message ?? "Failed to load"))
       .finally(() => alive && setLoading(false));
@@ -49,26 +55,59 @@ export default function AdminDashboard() {
   const handleBookingStatus = async (id: string, status: Booking["status"]) => {
     setBusy((prev) => ({ ...prev, [id]: true }));
     try {
-      await fetch(`/api/booking/${id}/status`, {
+      const res = await fetch(`/api/booking/${id}/status`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ status })
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not update booking.");
+      }
       reload();
     } finally {
       setBusy((prev) => ({ ...prev, [id]: false }));
     }
   };
 
+  const handleCsvExport = async (kind: "bookings" | "guests" | "listings" | "availability") => {
+    setExportBusy(kind);
+    setError(null);
+    try {
+      await downloadAdminCsv(kind);
+    } catch (err: any) {
+      setError(err.message ?? "Could not export CSV.");
+    } finally {
+      setExportBusy(null);
+    }
+  };
+
   const handleInquiryStatus = async (id: string, status: Inquiry["status"]) => {
     setBusy((prev) => ({ ...prev, [id]: true }));
     try {
-      await fetch(`/api/inquiry/${id}/status`, {
+      const res = await fetch(`/api/inquiry/${id}/status`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ status })
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Could not update inquiry.");
+      }
       reload();
+    } finally {
+      setBusy((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handlePropertyArchive = async (id: string, archived: boolean) => {
+    setBusy((prev) => ({ ...prev, [id]: true }));
+    setError(null);
+    try {
+      await setPropertyArchived(id, archived);
+      reload();
+    } catch (err: any) {
+      setError(err.message ?? "Could not update property.");
     } finally {
       setBusy((prev) => ({ ...prev, [id]: false }));
     }
@@ -107,7 +146,7 @@ export default function AdminDashboard() {
         </div>
 
         {error && (
-          <div className="card p-4 text-red-600 mb-4">Couldn&apos;t load dashboard: {error}</div>
+          <div className="card p-4 text-red-600 mb-4">{error}</div>
         )}
 
         {/* KPIs */}
@@ -128,6 +167,44 @@ export default function AdminDashboard() {
           <PortfolioCard icon={<Key size={18} />} label="For lease" count={leaseCount}
             value={`${formatKsh(pipeline.leaseMonthlyProfit)} / month potential`} href="/listings?listingType=lease" />
         </div>
+
+        <AdminAnalytics
+          bookings={bookings}
+          inquiries={inquiries}
+          properties={properties}
+        />
+
+        <section className="mt-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Download size={20} className="text-brand-500" />
+                CSV exports
+              </h2>
+              <p className="text-sm text-ink-500 mt-1">
+                Server-generated files that use the same admin permissions as this dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {(["bookings", "guests", "listings", "availability"] as const).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => handleCsvExport(kind)}
+                disabled={exportBusy !== null}
+                className="btn-secondary px-4 py-3 text-sm capitalize disabled:opacity-60"
+              >
+                {exportBusy === kind ? (
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                ) : (
+                  <Download size={14} className="mr-2" />
+                )}
+                {kind}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Inquiries */}
         <section className="mt-10">
@@ -210,6 +287,61 @@ export default function AdminDashboard() {
                   })}
                   {!loading && inquiries.length === 0 && (
                     <tr><Td><span className="text-ink-500">No inquiries yet.</span></Td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* Restock subscribers */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Bell size={20} className="text-brand-500" />
+              Restock subscribers
+            </h2>
+            <span className="text-sm text-ink-500">
+              {restockSubscriptions.filter((s) => s.status === "active").length} active
+            </span>
+          </div>
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-ink-50 text-ink-500 uppercase text-[11px] tracking-wider">
+                  <tr>
+                    <Th>Email</Th>
+                    <Th>Property</Th>
+                    <Th>Status</Th>
+                    <Th>Subscribed</Th>
+                    <Th>Notified</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {restockSubscriptions.map((sub) => {
+                    const p = propertyById.get(sub.propertyId);
+                    return (
+                      <tr key={sub.id} className="border-t border-ink-100 hover:bg-ink-50/40">
+                        <Td>
+                          <div className="font-medium text-ink-900">{sub.email}</div>
+                        </Td>
+                        <Td>{p?.name ?? "Unknown listing"}</Td>
+                        <Td><StatusBadge status={sub.status} /></Td>
+                        <Td>{new Date(sub.createdAt).toLocaleDateString("en-KE")}</Td>
+                        <Td>
+                          {sub.notifiedAt
+                            ? new Date(sub.notifiedAt).toLocaleDateString("en-KE")
+                            : <span className="text-ink-400">-</span>}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                  {!loading && restockSubscriptions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-ink-500">
+                        No restock subscriptions yet.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -332,6 +464,7 @@ export default function AdminDashboard() {
                 p.listingType === "sale" ? p.saleMarkup ?? 0
                 : p.listingType === "lease" ? p.leaseMarkup ?? 0
                 : p.markup ?? 0;
+              const isBusy = Boolean(busy[p.id]);
               return (
                 <motion.div
                   key={p.id}
@@ -349,6 +482,11 @@ export default function AdminDashboard() {
                       <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-ink-100 text-ink-600">
                         {LISTING_TYPE_LABELS[p.listingType]}
                       </span>
+                      {p.archived && (
+                        <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                          Archived
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-ink-500 truncate">{p.location} &bull; {p.type}</div>
                     <div className="text-xs text-ink-500 truncate">
@@ -358,6 +496,29 @@ export default function AdminDashboard() {
                       <Mini label="Owner" value={p.listingType === "sale" ? formatKshCompact(ownerNum) : formatKsh(ownerNum)} />
                       <Mini label="Markup" value={p.listingType === "sale" ? formatKshCompact(markupNum) : formatKsh(markupNum)} tone="brand" />
                       <Mini label="Client" value={p.listingType === "sale" ? formatKshCompact(amount) : formatKsh(amount)} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Link
+                        href={`/admin/add-property?edit=${p.id}`}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200 transition-colors inline-flex items-center gap-1"
+                      >
+                        <Pencil size={11} /> Edit
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handlePropertyArchive(p.id, !p.archived)}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors disabled:opacity-60 inline-flex items-center gap-1"
+                      >
+                        {isBusy ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : p.archived ? (
+                          <ArchiveRestore size={11} />
+                        ) : (
+                          <Archive size={11} />
+                        )}
+                        {p.archived ? "Restore" : "Archive"}
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -475,6 +636,8 @@ function StatusBadge({ status }: { status: string }) {
     confirmed: "bg-emerald-100 text-emerald-800",
     completed: "bg-ink-100 text-ink-700",
     contacted: "bg-sky-100 text-sky-800",
+    active: "bg-emerald-100 text-emerald-800",
+    notified: "bg-sky-100 text-sky-800",
     closed: "bg-ink-100 text-ink-700",
     cancelled: "bg-red-100 text-red-700"
   };

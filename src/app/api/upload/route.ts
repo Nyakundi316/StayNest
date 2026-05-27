@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 const BUCKET = "property-images";
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -7,6 +8,9 @@ const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (auth.error) return auth.error;
+
     const form = await req.formData();
     const file = form.get("file") as File | null;
 
