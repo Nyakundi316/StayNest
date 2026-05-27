@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { createBookingAccessToken, manageBookingUrl } from "@/lib/booking-access";
 import { emailBookingLinks } from "@/lib/email";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 // Anonymous "I lost my manage link" recovery.
 // Deliberately ALWAYS returns 200 with the same body whether or not a
@@ -9,6 +10,23 @@ import { emailBookingLinks } from "@/lib/email";
 // which emails have booked with us.
 export async function POST(req: NextRequest) {
   try {
+    // 3 requests / minute / IP. Anything more is bot territory; legitimate
+    // users only hit this once. We respond 429 so the form can surface a
+    // helpful message — there's no email enumeration concern here because
+    // the IP is the rate key, not the email.
+    const rl = await rateLimit({
+      key: "booking-find",
+      identifier: clientIp(req),
+      max: 3,
+      windowSec: 60
+    });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Too many attempts. Try again in ${rl.resetIn} seconds.` },
+        { status: 429, headers: { "Retry-After": String(rl.resetIn) } }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
 
