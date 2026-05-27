@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { establishAdminSession, supabaseAuth } from "@/lib/supabase-auth";
 import { Eye, EyeOff } from "lucide-react";
@@ -12,7 +12,7 @@ function safeNext(value: string | null): string {
   return value;
 }
 
-export default function AdminLogin() {
+function AdminLoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
@@ -116,5 +116,13 @@ export default function AdminLogin() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AdminLogin() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginInner />
+    </Suspense>
   );
 }
