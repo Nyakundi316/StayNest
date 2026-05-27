@@ -11,6 +11,16 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+
+    // Honeypot: real users never see/fill the `website` field, so anything
+    // non-empty is a bot. Return the same 200 the success path returns so
+    // we don't tell the bot it tripped the trap.
+    const honeypot = typeof body.website === "string" ? body.website.trim() : "";
+    if (honeypot) {
+      console.warn("[booking/find] honeypot tripped");
+      return NextResponse.json({ ok: true });
+    }
+
     if (!email || !email.includes("@")) {
       return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
     }

@@ -6,6 +6,8 @@ import { Loader2, Mail, MailCheck } from "lucide-react";
 
 export default function FindBookingPage() {
   const [email, setEmail] = useState("");
+  // Honeypot — never visible to real users, only auto-filled by bots.
+  const [website, setWebsite] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export default function FindBookingPage() {
       const res = await fetch("/api/booking/find", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() })
+        body: JSON.stringify({ email: email.trim(), website })
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -84,6 +86,22 @@ export default function FindBookingPage() {
               placeholder="you@example.com"
             />
           </div>
+        </div>
+
+        {/* Honeypot: hidden from real users, irresistible to dumb bots. */}
+        <div aria-hidden="true" style={{
+          position: "absolute", left: "-9999px",
+          width: "1px", height: "1px", overflow: "hidden"
+        }}>
+          <label htmlFor="find-website">Website</label>
+          <input
+            id="find-website"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
         </div>
 
         {error && (
