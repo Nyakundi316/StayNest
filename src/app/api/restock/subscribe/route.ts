@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = await enforceRateLimit(req, { key: "restock-subscribe", max: 8, windowSec: 600 });
+    if (limited) return limited;
+
     const input = await req.json();
     const propertyId = typeof input.propertyId === "string" ? input.propertyId : "";
     const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";

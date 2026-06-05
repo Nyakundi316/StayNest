@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // Upstash Redis via plain REST — no npm dep, edge-runtime safe.
 // Provision a database at https://console.upstash.com/, then set:
@@ -75,6 +75,23 @@ export async function rateLimit(opts: RateLimitOpts): Promise<RateLimitResult> {
     console.error("[rate-limit] error:", err);
     return { ok: true, remaining: opts.max, resetIn: opts.windowSec };
   }
+}
+
+// Convenience guard for route handlers: keys the limit on the caller's IP and,
+// when the bucket is exhausted, returns a ready-to-send 429 (with Retry-After).
+// Returns null when the request is within budget, so callers read as:
+//   const limited = await enforceRateLimit(req, { key, max, windowSec });
+//   if (limited) return limited;
+export async function enforceRateLimit(
+  req: NextRequest,
+  opts: { key: string; max: number; windowSec: number }
+): Promise<NextResponse | null> {
+  const rl = await rateLimit({ ...opts, identifier: clientIp(req) });
+  if (rl.ok) return null;
+  return NextResponse.json(
+    { error: `Too many requests. Please try again in ${rl.resetIn} seconds.` },
+    { status: 429, headers: { "Retry-After": String(rl.resetIn) } }
+  );
 }
 
 export function clientIp(req: NextRequest): string {

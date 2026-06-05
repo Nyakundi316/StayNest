@@ -6,6 +6,7 @@ import {
   normalizeMpesaPhone,
   type MpesaConfig
 } from "@/lib/mpesa";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 async function getMpesaToken(config: MpesaConfig): Promise<string> {
   const credentials = Buffer.from(
@@ -30,6 +31,11 @@ export async function POST(req: NextRequest) {
   const { config } = loaded;
 
   try {
+    // STK pushes cost money and ring a real phone — cap hard per IP so a
+    // scripted caller can't drum up Daraja charges or harass numbers.
+    const limited = await enforceRateLimit(req, { key: "stk-push", max: 4, windowSec: 300 });
+    if (limited) return limited;
+
     const { bookingId, phone } = await req.json();
     if (!bookingId || !phone) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });

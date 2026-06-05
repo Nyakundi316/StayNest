@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 const BUCKET = "property-images";
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -10,6 +11,11 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireAdmin(req);
     if (auth.error) return auth.error;
+
+    // Admin-only already, but a leaked session shouldn't be able to hammer
+    // storage — generous since a listing legitimately uploads several images.
+    const limited = await enforceRateLimit(req, { key: "upload", max: 40, windowSec: 600 });
+    if (limited) return limited;
 
     const form = await req.formData();
     const file = form.get("file") as File | null;

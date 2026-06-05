@@ -5,9 +5,14 @@ import { mapProperty } from "@/lib/data";
 import { buildPriceBreakdown, nightsBetween } from "@/lib/pricing";
 import { resolveGuestUser } from "@/lib/guest-auth-server";
 import { createBookingAccessToken, manageBookingUrl } from "@/lib/booking-access";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    // Each create writes a row and fires two emails, so cap it tightly per IP.
+    const limited = await enforceRateLimit(req, { key: "booking-create", max: 5, windowSec: 600 });
+    if (limited) return limited;
+
     const input = await req.json();
     const db = createServerClient();
     const guest = await resolveGuestUser(req);

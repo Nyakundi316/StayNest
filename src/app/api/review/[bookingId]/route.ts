@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function GET(
   _req: NextRequest,
@@ -51,6 +52,9 @@ export async function POST(
   { params }: { params: Promise<{ bookingId: string }> }
 ) {
   try {
+    const limited = await enforceRateLimit(req, { key: "review-create", max: 6, windowSec: 600 });
+    if (limited) return limited;
+
     const { bookingId } = await params;
     const { guestName, rating, comment } = await req.json();
 

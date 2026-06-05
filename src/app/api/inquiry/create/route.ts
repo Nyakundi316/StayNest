@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { emailInquiryReceived, emailInquiryAlert } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    // Writes a row + two emails per call; same budget as booking creation.
+    const limited = await enforceRateLimit(req, { key: "inquiry-create", max: 5, windowSec: 600 });
+    if (limited) return limited;
+
     const input = await req.json();
     const db = createServerClient();
 
