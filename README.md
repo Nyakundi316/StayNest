@@ -23,7 +23,7 @@ npm run build
 npm run start
 ```
 
-The `.env.local` file is already populated with your Supabase project URL and anon/publishable keys. The Supabase project (`mszxurlwgxwjhlbrcwvd` — "StayNest") has been provisioned with three tables, a public-safe view, RLS policies and 8 properties / 4 owners / 4 sample bookings.
+The `.env.local` file is already populated with your Supabase project URL, public key and server-only service role key. The Supabase project (`mszxurlwgxwjhlbrcwvd` — "StayNest") has been provisioned with the production schema, a public-safe properties view, locked-down RLS policies and sample data.
 
 ## Project structure
 
@@ -81,16 +81,19 @@ clientTotal = clientPrice * nights + serviceFee
 | `/` | Hero, search, featured stays (live from Supabase), popular cities, host CTA |
 | `/listings` | Filterable grid (location, price, type, guests) |
 | `/listings/[id]` | Gallery, amenities, rules, host info, booking sidebar |
-| `/booking/[id]` | Booking form — submits to `bookings` table |
+| `/booking/[id]` | Booking form — submits through `/api/booking/create` |
 | `/admin` | Agent dashboard — totals, bookings, properties, owners |
 | `/admin/add-property` | Creates owner (or reuses by phone) + property in Supabase |
 | `/admin/owners` | Owners and their properties, with payouts and profit |
+| `/account/login` | Guest sign in for bookings and reviews |
+| `/account/forgot` | Password reset request for guest/admin accounts |
+| `/account/reset` | Password reset completion page |
 | `/about` | Story, mission, trust & safety |
 | `/contact` | Form + phone/email/address |
 
 ## Database schema
 
-Three tables under `public`:
+Core tables under `public`:
 
 - `owners (id uuid pk, name, phone, email, payout_method, created_at)`
 - `properties (id uuid pk, name, location, city, type, description, images jsonb,
@@ -99,61 +102,35 @@ Three tables under `public`:
 - `bookings (id uuid pk, property_id fk → properties, guest_name, guest_email,
    guest_phone, check_in date, check_out date, guests, nights, price_per_night,
    subtotal, service_fee, total, owner_payout, agent_profit, status, created_at)`
+- `inquiries`, `reviews`, `restock_subscriptions`, `recently_viewed_properties`
 
-A public-safe view `public.properties_public` exposes only `price_per_night`
-(computed) and the non-sensitive columns. It uses `security_invoker = true`,
-so RLS still applies.
+A public-safe view `public.properties_public` exposes only client-safe listing
+data. It collapses owner base price + markup into the displayed price columns,
+zeros markup fields and hides `owner_id`.
 
 ### RLS policies
 
-- `properties_public_read` — anyone may SELECT properties (the UI deliberately
-  doesn't display owner price / markup / owner_id).
-- `bookings_insert_anyone` — anyone may INSERT a booking request.
-- `bookings_read_open` — anyone may SELECT bookings (prototype only).
-- `owners_read_open` — anyone may SELECT owners (prototype only).
+- Public visitors may read `properties_public`, not the raw `properties` table.
+- Booking, inquiry, review, upload, admin and host writes go through Next.js API
+  routes using `SUPABASE_SERVICE_ROLE_KEY`.
+- Signed-in guests can read their own account bookings.
+- Hosts can read their own owner/property/booking data.
+- Admin access is guarded by Supabase auth plus the configured admin allowlist.
 
-> **Security note** — these policies are open for the prototype. Before going
-> to production, gate `properties` columns and the `bookings`/`owners` tables
-> behind authenticated admin access. See **Hardening for production** below.
+> **Security note** — keep `SUPABASE_SERVICE_ROLE_KEY` server-only. The browser
+> should use only `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or
+> `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-## Auth (next step)
+## Auth
 
-1. Enable email or phone auth in the Supabase dashboard.
-2. Add a `profiles` table:
-   ```sql
-   create table public.profiles (
-     id uuid primary key references auth.users on delete cascade,
-     role text not null default 'guest' check (role in ('guest','agent','admin'))
-   );
-   ```
-3. Tighten the RLS policies (replace each "anyone" rule with
-   `using ((select role from profiles where id = auth.uid()) = 'admin')` for
-   admin-only paths).
-4. Wrap `/admin/*` in middleware that redirects unauthenticated users:
-   ```ts
-   // src/middleware.ts
-   import { createMiddlewareClient } from "@supabase/ssr";
-   // …redirect if no session and pathname starts with "/admin"
-   ```
+Supabase email/password auth is used for guests, hosts and admins:
 
-## Hardening for production
-
-Before going live, run this migration to lock down internal fields:
-
-```sql
--- Block public reads from the raw properties table; force them through the view.
-drop policy "properties_public_read" on public.properties;
-create policy "properties_admin_read" on public.properties
-  for select using (
-    (select role from public.profiles where id = auth.uid()) in ('admin','agent')
-  );
-
--- Public visitors read the safe view instead.
-grant select on public.properties_public to anon, authenticated;
-```
-
-In `src/lib/data.ts`, swap `from("properties")` → `from("properties_public")`
-for every public-facing read and update the row mapper.
+- Guest pages live under `/account`.
+- Hosts sign in through `/host/login`; owner rows are linked by `user_id` or by
+  verified email on first sign-in.
+- Admins sign in through `/admin/login`; `/api/admin/session` validates the
+  Supabase user against `ADMIN_EMAILS`.
+- Password reset is available from guest and admin login pages.
 
 ## Payments (next step)
 

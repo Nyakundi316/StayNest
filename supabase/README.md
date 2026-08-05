@@ -3,7 +3,7 @@
 ## Migration files (canonical schema)
 
 `migrations/` is the source of truth for the database schema. Applied in order,
-these five files reproduce the full production schema on any fresh project:
+these files reproduce the full production schema on any fresh project:
 
 | File | What it creates |
 |---|---|
@@ -12,6 +12,11 @@ these five files reproduce the full production schema on any fresh project:
 | `20250510000003_security_hardening.sql` | `archived` flags, `review_token`, the `properties_public` view, locks down raw tables, `bookings_no_overlap` constraint |
 | `20250523000004_launch_features.sql` | `restock_subscriptions`, `recently_viewed_properties`, view rebuilt to show unavailable listings |
 | `20250523000005_storage_property_images.sql` | The `property-images` storage bucket + its policies |
+| `20260527000001_guest_accounts.sql` | Guest account linking for bookings |
+| `20260527000002_host_portal.sql` | Host ownership links and host-scoped policies |
+| `20260527000003_booking_cancellation.sql` | Booking cancellation audit fields |
+| `20260527000004_advisor_fixes.sql` | Supabase advisor hygiene fixes |
+| `20260604000001_fix_properties_economics_leak.sql` | Closes raw properties economics reads and removes open booking inserts |
 
 ## Fresh project setup
 
@@ -37,6 +42,11 @@ supabase migration repair --status applied 20250510000002
 supabase migration repair --status applied 20250510000003
 supabase migration repair --status applied 20250523000004
 supabase migration repair --status applied 20250523000005
+supabase migration repair --status applied 20260527000001
+supabase migration repair --status applied 20260527000002
+supabase migration repair --status applied 20260527000003
+supabase migration repair --status applied 20260527000004
+supabase migration repair --status applied 20260604000001
 ```
 
 The 11 MCP-created history rows are harmless and can be left in place, or

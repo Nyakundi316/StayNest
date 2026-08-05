@@ -4,7 +4,12 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useGuestSession } from "@/lib/guest-auth";
 
-const PUBLIC_ACCOUNT_PATHS = new Set(["/account/login", "/account/signup"]);
+const PUBLIC_ACCOUNT_PATHS = new Set([
+  "/account/login",
+  "/account/signup",
+  "/account/forgot",
+  "/account/reset"
+]);
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

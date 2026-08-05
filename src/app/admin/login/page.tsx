@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { establishAdminSession, supabaseAuth } from "@/lib/supabase-auth";
 import { Eye, EyeOff } from "lucide-react";
@@ -77,7 +78,15 @@ function AdminLoginInner() {
           </div>
 
           <div>
-            <label className="label" htmlFor="password">Password</label>
+            <div className="flex items-center justify-between">
+              <label className="label" htmlFor="password">Password</label>
+              <Link
+                href="/account/forgot?as=admin"
+                className="text-xs text-brand-600 hover:underline font-medium"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 id="password"

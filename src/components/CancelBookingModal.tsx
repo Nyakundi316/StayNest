@@ -24,11 +24,12 @@ export default function CancelBookingModal({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openedAt] = useState(Date.now);
 
   const isLate = useMemo(() => {
-    const hours = (new Date(checkIn).getTime() - Date.now()) / (1000 * 60 * 60);
+    const hours = (new Date(checkIn).getTime() - openedAt) / (1000 * 60 * 60);
     return hours < LATE_WINDOW_HOURS;
-  }, [checkIn]);
+  }, [checkIn, openedAt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };

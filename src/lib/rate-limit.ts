@@ -26,8 +26,8 @@ interface RateLimitOpts {
 }
 
 export async function rateLimit(opts: RateLimitOpts): Promise<RateLimitResult> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = cleanEnvValue(process.env.UPSTASH_REDIS_REST_URL);
+  const token = cleanEnvValue(process.env.UPSTASH_REDIS_REST_TOKEN);
 
   if (!url || !token) {
     if (process.env.NODE_ENV === "production") {
@@ -75,6 +75,19 @@ export async function rateLimit(opts: RateLimitOpts): Promise<RateLimitResult> {
     console.error("[rate-limit] error:", err);
     return { ok: true, remaining: opts.max, resetIn: opts.windowSec };
   }
+}
+
+function cleanEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if ((first === `"` && last === `"`) || (first === `'` && last === `'`)) {
+    return trimmed.slice(1, -1).trim() || undefined;
+  }
+
+  return trimmed;
 }
 
 // Convenience guard for route handlers: keys the limit on the caller's IP and,
